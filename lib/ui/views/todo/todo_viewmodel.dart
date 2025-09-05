@@ -23,7 +23,7 @@ class TodoViewModel extends ReactiveViewModel {
     if (title.isEmpty) {
       _snackbarService.showSnackbar(
         message: 'Please enter a valid todo (no emojis or symbols).',
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 1),
       );
       return;
     }
