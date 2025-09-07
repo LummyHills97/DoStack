@@ -1,38 +1,51 @@
-import 'package:injectable/injectable.dart';
-import 'package:stacked/stacked.dart';
+import 'package:hive/hive.dart';
 import '../models/todo.dart';
 
-@lazySingleton
-class TodoService with ListenableServiceMixin {
-  TodoService() {
-    listenToReactiveValues([_todos]);
+class TodoService {
+  static const String _boxName = 'todos';
+  late Box<Todo> _todoBox;
+
+  /// Initialize Hive box
+  Future<void> init() async {
+    _todoBox = Hive.box<Todo>(_boxName);
   }
 
-  final ReactiveValue<List<Todo>> _todos = ReactiveValue<List<Todo>>([]);
-
-  List<Todo> get todos => _todos.value;
-
-  void add(String title) {
-    if (title.trim().isEmpty) return;
-    final todo = Todo(id: DateTime.now().toString(), title: title.trim());
-    _todos.value = [..._todos.value, todo];
+  /// Get all todos
+  List<Todo> getTodos() {
+    return _todoBox.values.toList();
   }
 
-  void toggle(String id) {
-    _todos.value = _todos.value.map((todo) =>
-      todo.id == id ? todo.copyWith(isCompleted: !todo.isCompleted) : todo
-    ).toList();
+  /// Watch todos (for reactive UI)
+  Stream<List<Todo>> watchTodos() {
+    return _todoBox.watch().map((_) => getTodos());
   }
 
-  void delete(String id) {
-    _todos.value = _todos.value.where((t) => t.id != id).toList();
+  /// Add new todo
+  Future<void> addTodo(Todo todo) async {
+    await _todoBox.put(todo.id, todo);
   }
 
-  void clearCompleted() {
-    _todos.value = _todos.value.where((t) => !t.isCompleted).toList();
+  /// Update an existing todo
+  Future<void> updateTodo(Todo todo) async {
+    await _todoBox.put(todo.id, todo);
   }
 
-  int get completed => _todos.value.where((t) => t.isCompleted).length;
-  int get pending => _todos.value.where((t) => !t.isCompleted).length;
-  int get total => _todos.value.length;
+  /// Delete todo
+  Future<void> deleteTodo(String id) async {
+    await _todoBox.delete(id);
+  }
+
+  /// Toggle completed state
+  Future<void> toggleTodoComplete(String id) async {
+    final todo = _todoBox.get(id);
+    if (todo != null) {
+      todo.isCompleted = !todo.isCompleted;
+      await todo.save();
+    }
+  }
+
+  /// Clear all todos
+  Future<void> clearTodos() async {
+    await _todoBox.clear();
+  }
 }
