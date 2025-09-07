@@ -4,14 +4,27 @@ import 'package:stacked_todo_demo/app/app.locator.dart';
 import '../../models/todo.dart';
 
 void setupDialogUi() {
-  final dialogService = locator<DialogService>();
-  dialogService.registerCustomDialogBuilder(
-    variant: DialogType.form,
-    builder: (context, dialogRequest, onDialogTap) => FormDialog(
-      request: dialogRequest,
-      completion: onDialogTap,
-    ),
-  );
+  print('🔧 Setting up dialog UI...');
+  
+  try {
+    final dialogService = locator<DialogService>();
+    print('✅ Got DialogService from locator');
+    
+    dialogService.registerCustomDialogBuilder(
+      variant: DialogType.form,
+      builder: (context, dialogRequest, onDialogTap) {
+        print('🏗️ Building FormDialog...');
+        return FormDialog(
+          request: dialogRequest,
+          completion: onDialogTap,
+        );
+      },
+    );
+    
+    print('✅ Dialog builder registered successfully');
+  } catch (e) {
+    print('❌ Error setting up dialog UI: $e');
+  }
 }
 
 enum DialogType { form }
