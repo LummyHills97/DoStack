@@ -60,6 +60,8 @@ class TodoViewModel extends BaseViewModel {
   /// Show the existing custom dialog and create the Todo from result
   Future<void> addTodo() async {
     try {
+      print('🔄 Starting addTodo...');
+      
       final response = await _dialogService.showCustomDialog(
         variant: DialogType.form,
         title: 'Add New Todo',
@@ -72,59 +74,85 @@ class TodoViewModel extends BaseViewModel {
         },
       );
 
+      print('✅ Dialog response: ${response?.confirmed}, data: ${response?.data}');
+
       if (response?.confirmed == true && response?.data != null) {
         final data = response!.data as Map<String, dynamic>;
+        print('📋 Dialog data keys: ${data.keys.toList()}');
+        
         final titleController = data['titleController'] as TextEditingController;
         final notesController = data['notesController'] as TextEditingController;
         
         final title = titleController.text.trim();
+        print('📝 Title: "$title"');
+        
         if (title.isEmpty) {
+          print('⚠️ Title is empty');
           _snackbarService.showSnackbar(message: 'Please enter a todo title.');
           return;
         }
+
+        final priority = data['priority'] as TaskPriority;
+        final category = data['category'] as TaskCategory;
+        final dueDate = data['dueDate'] as DateTime?;
+        
+        print('🎯 Priority: $priority, Category: $category, DueDate: $dueDate');
 
         final newTodo = Todo(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           title: title,
           notes: notesController.text.trim(),
-          priority: data['priority'] as TaskPriority,
-          category: data['category'] as TaskCategory,
-          dueDate: data['dueDate'] as DateTime?,
+          priority: priority,
+          category: category,
+          dueDate: dueDate,
           isRecurring: false,
           isCompleted: false,
           timeSpentMinutes: 0,
           streakCount: 0,
         );
 
+        print('✨ Created todo: ${newTodo.id} - ${newTodo.title}');
+
         await _todoService.add(newTodo);
+        print('✅ Todo added to service');
+        
         _snackbarService.showSnackbar(message: 'Todo added successfully!');
         
         // Dispose controllers to prevent memory leaks
         titleController.dispose();
         notesController.dispose();
+        print('🧹 Controllers disposed');
+        
+      } else {
+        print('❌ Dialog was cancelled or returned null data');
       }
-    } catch (e) {
-      print('Error adding todo: $e');
-      _snackbarService.showSnackbar(message: 'Failed to add todo. Please try again.');
+    } catch (e, stackTrace) {
+      print('❌ Error in addTodo: $e');
+      print('📍 Stack trace: $stackTrace');
+      _snackbarService.showSnackbar(message: 'Failed to add todo. Error: $e');
     }
   }
 
   Future<void> toggleComplete(String id) async {
     try {
+      print('🔄 Toggling todo completion: $id');
       await _todoService.toggleComplete(id);
       _snackbarService.showSnackbar(message: 'Todo updated');
+      print('✅ Todo toggled successfully');
     } catch (e) {
-      print('Error toggling todo: $e');
+      print('❌ Error toggling todo: $e');
       _snackbarService.showSnackbar(message: 'Failed to update todo');
     }
   }
 
   Future<void> deleteTodo(String id) async {
     try {
+      print('🗑️ Deleting todo: $id');
       await _todoService.delete(id);
       _snackbarService.showSnackbar(message: 'Todo deleted');
+      print('✅ Todo deleted successfully');
     } catch (e) {
-      print('Error deleting todo: $e');
+      print('❌ Error deleting todo: $e');
       _snackbarService.showSnackbar(message: 'Failed to delete todo');
     }
   }
@@ -132,6 +160,8 @@ class TodoViewModel extends BaseViewModel {
   Future<void> clearCompleted() async {
     try {
       final completedCount = completed;
+      print('🧹 Clearing $completedCount completed todos');
+      
       if (completedCount == 0) {
         _snackbarService.showSnackbar(message: 'No completed todos to clear');
         return;
@@ -139,15 +169,17 @@ class TodoViewModel extends BaseViewModel {
       
       await _todoService.clearCompleted();
       _snackbarService.showSnackbar(message: 'Cleared $completedCount completed todos');
+      print('✅ Completed todos cleared successfully');
     } catch (e) {
-      print('Error clearing completed todos: $e');
+      print('❌ Error clearing completed todos: $e');
       _snackbarService.showSnackbar(message: 'Failed to clear completed todos');
     }
   }
 
   Future<void> editTodo(Todo todo) async {
     try {
-      // reuse the custom dialog by passing initialTodo data via customData
+      print('✏️ Editing todo: ${todo.id} - ${todo.title}');
+      
       final response = await _dialogService.showCustomDialog(
         variant: DialogType.form,
         title: 'Edit Todo',
@@ -161,6 +193,8 @@ class TodoViewModel extends BaseViewModel {
         },
       );
 
+      print('✅ Edit dialog response: ${response?.confirmed}, data: ${response?.data}');
+
       if (response?.confirmed == true && response?.data != null) {
         final data = response!.data as Map<String, dynamic>;
         final titleController = data['titleController'] as TextEditingController;
@@ -168,6 +202,7 @@ class TodoViewModel extends BaseViewModel {
         
         final title = titleController.text.trim();
         if (title.isEmpty) {
+          print('⚠️ Edit: Title is empty');
           _snackbarService.showSnackbar(message: 'Title cannot be empty');
           return;
         }
@@ -180,16 +215,21 @@ class TodoViewModel extends BaseViewModel {
           dueDate: data['dueDate'] as DateTime?,
         );
 
+        print('🔄 Updating todo with new data');
         await _todoService.update(updated);
         _snackbarService.showSnackbar(message: 'Todo updated successfully');
+        print('✅ Todo updated successfully');
         
         // Dispose controllers to prevent memory leaks
         titleController.dispose();
         notesController.dispose();
+      } else {
+        print('❌ Edit dialog was cancelled');
       }
-    } catch (e) {
-      print('Error editing todo: $e');
-      _snackbarService.showSnackbar(message: 'Failed to update todo. Please try again.');
+    } catch (e, stackTrace) {
+      print('❌ Error editing todo: $e');
+      print('📍 Stack trace: $stackTrace');
+      _snackbarService.showSnackbar(message: 'Failed to update todo. Error: $e');
     }
   }
 }

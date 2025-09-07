@@ -5,11 +5,13 @@ import '../services/todo_service.dart';
 final GetIt locator = GetIt.instance;
 
 void setupLocator() {
-  // Register TodoService
-  locator.registerLazySingleton<TodoService>(() => TodoService());
-  
-  // Register Stacked Services
+  // Register Stacked Services FIRST
   locator.registerLazySingleton<NavigationService>(() => NavigationService());
   locator.registerLazySingleton<DialogService>(() => DialogService());
   locator.registerLazySingleton<SnackbarService>(() => SnackbarService());
+
+  // Register TodoService AFTER the other services
+  locator.registerLazySingleton<TodoService>(() => TodoService());
+
+  print('✅ All services registered in locator');
 }
