@@ -1,53 +1,70 @@
-// main.dart
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:stacked_services/stacked_services.dart';
-import 'package:stacked_todo_demo/app/app_dialog.dart';
+
 import 'app/app.locator.dart';
-import 'ui/views/todo/todo_view.dart';
-// import your Hive models + generated adapters
+import 'app/app_dialog.dart'; // provides setupDialogUi()
 import 'models/todo.dart';
+import 'ui/views/todo/todo_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Hive
+  // 1) Initialize Hive
   await Hive.initFlutter();
 
-  // Register adapters (generated files must exist)
-  Hive.registerAdapter(TodoAdapter());
-  Hive.registerAdapter(SubTaskAdapter());
-  Hive.registerAdapter(TaskPriorityAdapter());
-  Hive.registerAdapter(TaskCategoryAdapter());
-
-  // Open boxes BEFORE creating/using services that access them
-  await Hive.openBox<Todo>('todos');
-
-  // Setup locator
-  setupLocator();
-  print('✅ Locator setup complete');
-
-  // Setup dialog UI directly here instead of calling setupDialogUi()
+  // 2) Register adapters (safe: only register if not already registered)
   try {
-    final dialogService = locator<DialogService>();
-    print('✅ Got DialogService from locator');
-    
-    dialogService.registerCustomDialogBuilder(
-      variant: DialogType.form,
-      builder: (context, dialogRequest, onDialogTap) {
-        print('🏗️ Building FormDialog in main...');
-        return FormDialog(
-          request: dialogRequest,
-          completion: onDialogTap,
-        );
-      },
-    );
-    print('✅ Dialog builder registered successfully in main');
-  } catch (e) {
-    print('❌ Error registering dialog in main: $e');
+    _registerAdaptersSafe();
+    debugPrint('✅ Hive adapters registered (or were already registered).');
+  } catch (e, st) {
+    debugPrint('❌ Error registering adapters: $e\n$st');
+    rethrow;
   }
 
+  // 3) Open boxes BEFORE creating/using services that expect them
+  try {
+    await Hive.openBox<Todo>('todos');
+    debugPrint('✅ Opened Hive box "todos".');
+  } catch (e, st) {
+    debugPrint('❌ Failed to open Hive box: $e\n$st');
+    rethrow;
+  }
+
+  // 4) Setup service locator (registers services like DialogService, TodoService, etc.)
+  setupLocator();
+  debugPrint('✅ Service locator setup complete.');
+
+  // 5) Register dialog builders (uses the same DialogService instance from locator)
+  //    This wires up your custom dialogs so showCustomDialog(...) works.
+  try {
+    setupDialogUi();
+    debugPrint('✅ Custom dialog UI registered.');
+  } catch (e, st) {
+    debugPrint('❌ Error during setupDialogUi(): $e\n$st');
+    rethrow;
+  }
+
+  // 6) Run the app
   runApp(const MyApp());
+}
+
+void _registerAdaptersSafe() {
+  // Adapter typeIds must match what your generated (or manual) todo.g.dart defines.
+  // Only register if Hive hasn't already seen that typeId.
+  if (!Hive.isAdapterRegistered(TaskPriorityAdapter().typeId)) {
+    Hive.registerAdapter(TaskPriorityAdapter());
+  }
+  if (!Hive.isAdapterRegistered(TaskCategoryAdapter().typeId)) {
+    Hive.registerAdapter(TaskCategoryAdapter());
+  }
+  if (!Hive.isAdapterRegistered(SubTaskAdapter().typeId)) {
+    Hive.registerAdapter(SubTaskAdapter());
+  }
+  if (!Hive.isAdapterRegistered(TodoAdapter().typeId)) {
+    Hive.registerAdapter(TodoAdapter());
+  }
 }
 
 class MyApp extends StatelessWidget {

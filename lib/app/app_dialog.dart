@@ -3,226 +3,191 @@ import 'package:stacked_services/stacked_services.dart';
 import 'package:stacked_todo_demo/app/app.locator.dart';
 import '../../models/todo.dart';
 
-void setupDialogUi() {
-  print('🔧 Setting up dialog UI...');
-  
-  try {
-    final dialogService = locator<DialogService>();
-    print('✅ Got DialogService from locator');
-    
-    dialogService.registerCustomDialogBuilder(
-      variant: DialogType.form,
-      builder: (context, dialogRequest, onDialogTap) {
-        print('🏗️ Building FormDialog...');
-        return FormDialog(
-          request: dialogRequest,
-          completion: onDialogTap,
-        );
-      },
-    );
-    
-    print('✅ Dialog builder registered successfully');
-  } catch (e) {
-    print('❌ Error setting up dialog UI: $e');
-  }
-}
-
 enum DialogType { form }
 
+void setupDialogUi() {
+  final dialogService = locator<DialogService>();
+
+  dialogService.registerCustomDialogBuilder(
+    variant: DialogType.form,
+    builder: (context, request, completer) => FormDialog(
+      request: request,
+      completer: completer,
+    ),
+  );
+}
+
+/// Custom Form Dialog
 class FormDialog extends StatefulWidget {
   final DialogRequest request;
-  final Function(DialogResponse) completion;
+  final Function(DialogResponse) completer;
 
-  const FormDialog({required this.request, required this.completion, super.key});
+  const FormDialog({
+    super.key,
+    required this.request,
+    required this.completer,
+  });
 
   @override
   State<FormDialog> createState() => _FormDialogState();
 }
 
 class _FormDialogState extends State<FormDialog> {
-  late TextEditingController titleController;
-  late TextEditingController notesController;
-  late TaskPriority selectedPriority;
-  late TaskCategory selectedCategory;
-  DateTime? selectedDueDate;
+  late final TextEditingController titleController;
+  late final TextEditingController notesController;
+  late TaskPriority priority;
+  late TaskCategory category;
+  DateTime? dueDate;
 
   @override
   void initState() {
     super.initState();
-    titleController = widget.request.customData['titleController'] as TextEditingController;
-    notesController = widget.request.customData['notesController'] as TextEditingController;
-    selectedPriority = widget.request.customData['priority'] as TaskPriority;
-    selectedCategory = widget.request.customData['category'] as TaskCategory;
-    selectedDueDate = widget.request.customData['dueDate'] as DateTime?;
+    final data = widget.request.customData ?? {};
+    titleController = data['titleController'] ?? TextEditingController();
+    notesController = data['notesController'] ?? TextEditingController();
+    priority = data['priority'] ?? TaskPriority.medium;
+    category = data['category'] ?? TaskCategory.personal;
+    dueDate = data['dueDate'];
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.request.title ?? '',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                border: OutlineInputBorder(),
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(widget.request.title ?? 'Todo',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+
+              /// Title
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  labelText: 'Title *',
+                  border: OutlineInputBorder(),
+                ),
+                autofocus: true,
               ),
-              autofocus: true,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+
+              /// Notes
+              TextField(
+                controller: notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
               ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<TaskPriority>(
-              value: selectedPriority,
-              decoration: const InputDecoration(
-                labelText: 'Priority',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+
+              /// Priority
+              DropdownButtonFormField<TaskPriority>(
+                value: priority,
+                decoration: const InputDecoration(
+                  labelText: 'Priority',
+                  border: OutlineInputBorder(),
+                ),
+                items: TaskPriority.values.map((p) {
+                  return DropdownMenuItem(
+                    value: p,
+                    child: Row(
+                      children: [
+                        CircleAvatar(radius: 6, backgroundColor: p.color),
+                        const SizedBox(width: 8),
+                        Text(p.label),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) => setState(() => priority = val!),
               ),
-              items: TaskPriority.values
-                  .map((p) => DropdownMenuItem(
-                        value: p,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: p.color,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(p.label),
-                          ],
-                        ),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    selectedPriority = value;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<TaskCategory>(
-              value: selectedCategory,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+
+              /// Category
+              DropdownButtonFormField<TaskCategory>(
+                value: category,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  border: OutlineInputBorder(),
+                ),
+                items: TaskCategory.values.map((c) {
+                  return DropdownMenuItem(
+                    value: c,
+                    child: Row(
+                      children: [Icon(c.icon, size: 16), const SizedBox(width: 8), Text(c.label)],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) => setState(() => category = val!),
               ),
-              items: TaskCategory.values
-                  .map((c) => DropdownMenuItem(
-                        value: c,
-                        child: Row(
-                          children: [
-                            Icon(c.icon, size: 16),
-                            const SizedBox(width: 8),
-                            Text(c.label),
-                          ],
-                        ),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    selectedCategory = value;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
+              const SizedBox(height: 12),
+
+              /// Due Date
+              Row(
                 children: [
-                  const Icon(Icons.calendar_today, size: 16),
-                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      selectedDueDate == null
+                      dueDate == null
                           ? 'No Due Date'
-                          : '${selectedDueDate!.day}/${selectedDueDate!.month}/${selectedDueDate!.year}',
+                          : '${dueDate!.day}/${dueDate!.month}/${dueDate!.year}',
                     ),
                   ),
                   TextButton(
                     onPressed: () async {
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate: selectedDueDate ?? DateTime.now(),
+                        initialDate: dueDate ?? DateTime.now(),
                         firstDate: DateTime.now(),
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                       );
                       if (picked != null) {
-                        setState(() {
-                          selectedDueDate = picked;
-                        });
+                        setState(() => dueDate = picked);
                       }
                     },
                     child: const Text('Pick Date'),
                   ),
-                  if (selectedDueDate != null)
+                  if (dueDate != null)
                     IconButton(
-                      onPressed: () {
-                        setState(() {
-                          selectedDueDate = null;
-                        });
-                      },
-                      icon: const Icon(Icons.clear, size: 16),
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() => dueDate = null),
                     ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () {
-                    widget.completion(DialogResponse(confirmed: false));
-                  },
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    widget.completion(DialogResponse(
-                      confirmed: true,
-                      data: {
-                        'titleController': titleController,
-                        'notesController': notesController,
-                        'priority': selectedPriority,
-                        'category': selectedCategory,
-                        'dueDate': selectedDueDate,
-                      },
-                    ));
-                  },
-                  child: Text(widget.request.title?.contains('Edit') == true ? 'Update' : 'Add'),
-                ),
-              ],
-            ),
-          ],
+              const SizedBox(height: 20),
+
+              /// Actions
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => widget.completer(DialogResponse(confirmed: false)),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      widget.completer(DialogResponse(
+                        confirmed: true,
+                        data: {
+                          'titleController': titleController,
+                          'notesController': notesController,
+                          'priority': priority,
+                          'category': category,
+                          'dueDate': dueDate,
+                        },
+                      ));
+                    },
+                    child: Text(widget.request.title?.contains('Edit') == true ? 'Update' : 'Add'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
