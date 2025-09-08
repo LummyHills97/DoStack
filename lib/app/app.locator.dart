@@ -5,7 +5,7 @@ import '../services/todo_service.dart';
 final GetIt locator = GetIt.instance;
 
 void setupLocator() {
-  // Register Stacked Services as SINGLETONS (not lazy singletons)
+  // Register Stacked Services as SINGLETONS
   locator.registerSingleton<NavigationService>(NavigationService());
   locator.registerSingleton<DialogService>(DialogService());
   locator.registerSingleton<SnackbarService>(SnackbarService());

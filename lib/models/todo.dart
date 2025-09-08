@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 
-part 'todo.g.dart'; // needed for Hive codegen
+part 'todo.g.dart'; // run build_runner to generate adapters
 
 /// =======================
 /// Task Priority Enum
@@ -105,7 +105,6 @@ class SubTask extends HiveObject {
     this.isCompleted = false,
   });
 
-  // Added copyWith method for SubTask too
   SubTask copyWith({
     String? title,
     bool? isCompleted,
@@ -164,12 +163,11 @@ class Todo extends HiveObject {
     this.dueDate,
     this.isRecurring = false,
     this.isCompleted = false,
-    List<SubTask>? subTasks,  // Fixed: changed parameter type
+    List<SubTask>? subTasks,
     this.timeSpentMinutes = 0,
     this.streakCount = 0,
-  }) : subTasks = subTasks ?? <SubTask>[];  // Fixed: proper initialization
+  }) : subTasks = subTasks ?? <SubTask>[];
 
-  // ADDED: The missing copyWith method that TodoViewModel needs
   Todo copyWith({
     String? id,
     String? title,

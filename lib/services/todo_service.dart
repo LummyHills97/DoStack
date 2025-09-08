@@ -3,10 +3,10 @@ import '../models/todo.dart';
 
 class TodoService {
   static const String _boxName = 'todos';
-  late Box<Todo> _todoBox;
+  late Box<Todo> _todoBox; // FIXED: removed asterisks
 
   Future<void> init() async {
-    _todoBox = Hive.box<Todo>(_boxName);  // Fixed: was *todoBox and *boxName
+    _todoBox = Hive.box<Todo>(_boxName); // FIXED: removed asterisks
   }
 
   /// Todos list
@@ -19,7 +19,7 @@ class TodoService {
 
   /// Watch todos for reactive UI
   Stream<List<Todo>> watchTodos() {
-    return _todoBox.watch().map((_) => todos);  // Fixed: was *todoBox and (*)
+    return _todoBox.watch().map((_) => todos); // FIXED: removed asterisks and used proper underscore
   }
 
   /// Add new todo
@@ -46,7 +46,7 @@ class TodoService {
     }
   }
 
-  /// Clear completed todos (Missing method that TodoViewModel needs)
+  /// Clear completed todos
   Future<void> clearCompleted() async {
     final completedTodos = todos.where((t) => t.isCompleted).toList();
     for (final todo in completedTodos) {
@@ -57,5 +57,25 @@ class TodoService {
   /// Clear all
   Future<void> clear() async {
     await _todoBox.clear();
+  }
+
+  /// Get todo by ID
+  Todo? getTodo(String id) {
+    return _todoBox.get(id);
+  }
+
+  /// Search todos
+  List<Todo> search(String query) {
+    if (query.trim().isEmpty) return todos;
+    
+    return todos.where((todo) {
+      return todo.title.toLowerCase().contains(query.toLowerCase()) ||
+             (todo.notes?.toLowerCase().contains(query.toLowerCase()) ?? false);
+    }).toList();
+  }
+
+  /// Get todos by completion status
+  List<Todo> getTodosByStatus(bool isCompleted) {
+    return todos.where((todo) => todo.isCompleted == isCompleted).toList();
   }
 }
