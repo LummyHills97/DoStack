@@ -2,18 +2,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:stacked/stacked.dart';
 import 'package:stacked_services/stacked_services.dart';
+import 'package:stacked_todo_demo/app/app_dialog.dart';
 import '../../../app/app.locator.dart';
 import '../../../services/todo_service.dart';
 import '../../../models/todo.dart';
 
 class TodoViewModel extends BaseViewModel {
   final TodoService _todoService = locator<TodoService>();
+  final DialogService _dialogService = locator<DialogService>();
   final SnackbarService _snackbarService = locator<SnackbarService>();
 
   StreamSubscription<List<Todo>>? _sub;
   bool _initialized = false;
 
   TodoViewModel() {
+    // start listening to service stream and refresh UI on updates
     _startWatching();
   }
 
@@ -54,32 +57,54 @@ class TodoViewModel extends BaseViewModel {
   int get overdue => todos.where((t) => t.isOverdue).length;
   int get dueToday => todos.where((t) => t.isDueToday).length;
 
-  /// Simple dialog using Flutter's built-in showDialog
-  Future<void> addTodo(BuildContext context) async {
+  /// Show the existing custom dialog and create the Todo from result
+  Future<void> addTodo() async {
     try {
-      print('🔄 Starting addTodo with simple dialog...');
+      print('🔄 Starting addTodo...');
       
-      final result = await showDialog<Map<String, dynamic>>(
-        context: context,
-        builder: (context) => AddTodoDialog(),
+      final response = await _dialogService.showCustomDialog(
+        variant: DialogType.form,
+        title: 'Add New Todo',
+        customData: {
+          'titleController': TextEditingController(),
+          'notesController': TextEditingController(),
+          'priority': TaskPriority.medium,
+          'category': TaskCategory.personal,
+          'dueDate': null as DateTime?,
+        },
       );
 
-      print('✅ Dialog result: $result');
+      print('✅ Dialog response: ${response?.confirmed}, data: ${response?.data}');
 
-      if (result != null) {
-        final title = result['title'] as String;
-        if (title.trim().isEmpty) {
+      if (response?.confirmed == true && response?.data != null) {
+        final data = response!.data as Map<String, dynamic>;
+        print('📋 Dialog data keys: ${data.keys.toList()}');
+        
+        final titleController = data['titleController'] as TextEditingController;
+        final notesController = data['notesController'] as TextEditingController;
+        
+        final title = titleController.text.trim();
+        print('📝 Title: "$title"');
+        
+        if (title.isEmpty) {
+          print('⚠️ Title is empty');
           _snackbarService.showSnackbar(message: 'Please enter a todo title.');
           return;
         }
 
+        final priority = data['priority'] as TaskPriority;
+        final category = data['category'] as TaskCategory;
+        final dueDate = data['dueDate'] as DateTime?;
+        
+        print('🎯 Priority: $priority, Category: $category, DueDate: $dueDate');
+
         final newTodo = Todo(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: title.trim(),
-          notes: result['notes'] as String? ?? '',
-          priority: result['priority'] as TaskPriority? ?? TaskPriority.medium,
-          category: result['category'] as TaskCategory? ?? TaskCategory.personal,
-          dueDate: result['dueDate'] as DateTime?,
+          title: title,
+          notes: notesController.text.trim(),
+          priority: priority,
+          category: category,
+          dueDate: dueDate,
           isRecurring: false,
           isCompleted: false,
           timeSpentMinutes: 0,
@@ -87,9 +112,19 @@ class TodoViewModel extends BaseViewModel {
         );
 
         print('✨ Created todo: ${newTodo.id} - ${newTodo.title}');
+
         await _todoService.add(newTodo);
+        print('✅ Todo added to service');
+        
         _snackbarService.showSnackbar(message: 'Todo added successfully!');
-        print('✅ Todo added successfully');
+        
+        // Dispose controllers to prevent memory leaks
+        titleController.dispose();
+        notesController.dispose();
+        print('🧹 Controllers disposed');
+        
+      } else {
+        print('❌ Dialog was cancelled or returned null data');
       }
     } catch (e, stackTrace) {
       print('❌ Error in addTodo: $e');
@@ -98,45 +133,12 @@ class TodoViewModel extends BaseViewModel {
     }
   }
 
-  /// Simple edit dialog
-  Future<void> editTodo(BuildContext context, Todo todo) async {
-    try {
-      print('✏️ Editing todo: ${todo.id} - ${todo.title}');
-      
-      final result = await showDialog<Map<String, dynamic>>(
-        context: context,
-        builder: (context) => AddTodoDialog(existingTodo: todo),
-      );
-
-      if (result != null) {
-        final title = result['title'] as String;
-        if (title.trim().isEmpty) {
-          _snackbarService.showSnackbar(message: 'Title cannot be empty');
-          return;
-        }
-
-        final updated = todo.copyWith(
-          title: title.trim(),
-          notes: result['notes'] as String? ?? '',
-          priority: result['priority'] as TaskPriority? ?? todo.priority,
-          category: result['category'] as TaskCategory? ?? todo.category,
-          dueDate: result['dueDate'] as DateTime?,
-        );
-
-        await _todoService.update(updated);
-        _snackbarService.showSnackbar(message: 'Todo updated successfully');
-        print('✅ Todo updated successfully');
-      }
-    } catch (e) {
-      print('❌ Error editing todo: $e');
-      _snackbarService.showSnackbar(message: 'Failed to update todo');
-    }
-  }
-
   Future<void> toggleComplete(String id) async {
     try {
+      print('🔄 Toggling todo completion: $id');
       await _todoService.toggleComplete(id);
       _snackbarService.showSnackbar(message: 'Todo updated');
+      print('✅ Todo toggled successfully');
     } catch (e) {
       print('❌ Error toggling todo: $e');
       _snackbarService.showSnackbar(message: 'Failed to update todo');
@@ -145,8 +147,10 @@ class TodoViewModel extends BaseViewModel {
 
   Future<void> deleteTodo(String id) async {
     try {
+      print('🗑️ Deleting todo: $id');
       await _todoService.delete(id);
       _snackbarService.showSnackbar(message: 'Todo deleted');
+      print('✅ Todo deleted successfully');
     } catch (e) {
       print('❌ Error deleting todo: $e');
       _snackbarService.showSnackbar(message: 'Failed to delete todo');
@@ -156,6 +160,8 @@ class TodoViewModel extends BaseViewModel {
   Future<void> clearCompleted() async {
     try {
       final completedCount = completed;
+      print('🧹 Clearing $completedCount completed todos');
+      
       if (completedCount == 0) {
         _snackbarService.showSnackbar(message: 'No completed todos to clear');
         return;
@@ -163,207 +169,67 @@ class TodoViewModel extends BaseViewModel {
       
       await _todoService.clearCompleted();
       _snackbarService.showSnackbar(message: 'Cleared $completedCount completed todos');
+      print('✅ Completed todos cleared successfully');
     } catch (e) {
       print('❌ Error clearing completed todos: $e');
       _snackbarService.showSnackbar(message: 'Failed to clear completed todos');
     }
   }
-}
 
-/// Simple custom dialog widget
-class AddTodoDialog extends StatefulWidget {
-  final Todo? existingTodo;
-  
-  const AddTodoDialog({Key? key, this.existingTodo}) : super(key: key);
+  Future<void> editTodo(Todo todo) async {
+    try {
+      print('✏️ Editing todo: ${todo.id} - ${todo.title}');
+      
+      final response = await _dialogService.showCustomDialog(
+        variant: DialogType.form,
+        title: 'Edit Todo',
+        customData: {
+          'titleController': TextEditingController(text: todo.title),
+          'notesController': TextEditingController(text: todo.notes),
+          'priority': todo.priority,
+          'category': todo.category,
+          'dueDate': todo.dueDate,
+          'initialId': todo.id,
+        },
+      );
 
-  @override
-  State<AddTodoDialog> createState() => _AddTodoDialogState();
-}
+      print('✅ Edit dialog response: ${response?.confirmed}, data: ${response?.data}');
 
-class _AddTodoDialogState extends State<AddTodoDialog> {
-  late TextEditingController titleController;
-  late TextEditingController notesController;
-  TaskPriority selectedPriority = TaskPriority.medium;
-  TaskCategory selectedCategory = TaskCategory.personal;
-  DateTime? selectedDueDate;
+      if (response?.confirmed == true && response?.data != null) {
+        final data = response!.data as Map<String, dynamic>;
+        final titleController = data['titleController'] as TextEditingController;
+        final notesController = data['notesController'] as TextEditingController;
+        
+        final title = titleController.text.trim();
+        if (title.isEmpty) {
+          print('⚠️ Edit: Title is empty');
+          _snackbarService.showSnackbar(message: 'Title cannot be empty');
+          return;
+        }
 
-  @override
-  void initState() {
-    super.initState();
-    
-    // Initialize with existing todo data if editing
-    if (widget.existingTodo != null) {
-      titleController = TextEditingController(text: widget.existingTodo!.title);
-      notesController = TextEditingController(text: widget.existingTodo!.notes);
-      selectedPriority = widget.existingTodo!.priority;
-      selectedCategory = widget.existingTodo!.category;
-      selectedDueDate = widget.existingTodo!.dueDate;
-    } else {
-      titleController = TextEditingController();
-      notesController = TextEditingController();
+        final updated = todo.copyWith(
+          title: title,
+          notes: notesController.text.trim(),
+          priority: data['priority'] as TaskPriority,
+          category: data['category'] as TaskCategory,
+          dueDate: data['dueDate'] as DateTime?,
+        );
+
+        print('🔄 Updating todo with new data');
+        await _todoService.update(updated);
+        _snackbarService.showSnackbar(message: 'Todo updated successfully');
+        print('✅ Todo updated successfully');
+        
+        // Dispose controllers to prevent memory leaks
+        titleController.dispose();
+        notesController.dispose();
+      } else {
+        print('❌ Edit dialog was cancelled');
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error editing todo: $e');
+      print('📍 Stack trace: $stackTrace');
+      _snackbarService.showSnackbar(message: 'Failed to update todo. Error: $e');
     }
-  }
-
-  @override
-  void dispose() {
-    titleController.dispose();
-    notesController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.existingTodo != null ? 'Edit Todo' : 'Add New Todo'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Title *',
-                border: OutlineInputBorder(),
-              ),
-              autofocus: true,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<TaskPriority>(
-              value: selectedPriority,
-              decoration: const InputDecoration(
-                labelText: 'Priority',
-                border: OutlineInputBorder(),
-              ),
-              items: TaskPriority.values.map((priority) {
-                return DropdownMenuItem(
-                  value: priority,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: priority.color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(priority.label),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    selectedPriority = value;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<TaskCategory>(
-              value: selectedCategory,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                border: OutlineInputBorder(),
-              ),
-              items: TaskCategory.values.map((category) {
-                return DropdownMenuItem(
-                  value: category,
-                  child: Row(
-                    children: [
-                      Icon(category.icon, size: 16),
-                      const SizedBox(width: 8),
-                      Text(category.label),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    selectedCategory = value;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      selectedDueDate == null
-                          ? 'No Due Date'
-                          : '${selectedDueDate!.day}/${selectedDueDate!.month}/${selectedDueDate!.year}',
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDueDate ?? DateTime.now(),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          selectedDueDate = picked;
-                        });
-                      }
-                    },
-                    child: const Text('Pick'),
-                  ),
-                  if (selectedDueDate != null)
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          selectedDueDate = null;
-                        });
-                      },
-                      icon: const Icon(Icons.clear, size: 16),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop({
-              'title': titleController.text,
-              'notes': notesController.text,
-              'priority': selectedPriority,
-              'category': selectedCategory,
-              'dueDate': selectedDueDate,
-            });
-          },
-          child: Text(widget.existingTodo != null ? 'Update' : 'Add'),
-        ),
-      ],
-    );
   }
 }

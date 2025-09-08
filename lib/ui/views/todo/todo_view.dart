@@ -1,7 +1,8 @@
+// lib/ui/views/todo/todo_view.dart
 import 'package:flutter/material.dart';
 import 'package:stacked/stacked.dart';
+import 'package:stacked_todo_demo/models/todo.dart';
 import 'todo_viewmodel.dart';
-import '../../../models/todo.dart';
 
 class TodoView extends StatelessWidget {
   const TodoView({super.key});
@@ -10,7 +11,7 @@ class TodoView extends StatelessWidget {
   Widget build(BuildContext context) {
     return ViewModelBuilder<TodoViewModel>.reactive(
       viewModelBuilder: () => TodoViewModel(),
-      builder: (context, model, _) => Scaffold(
+      builder: (context, model, child) => Scaffold(
         appBar: AppBar(
           title: const Text('DoStack - Enhanced Todo'),
           backgroundColor: Colors.indigo,
@@ -26,11 +27,11 @@ class TodoView extends StatelessWidget {
         ),
         body: Column(
           children: [
-            _buildStats(model),
+            _buildEnhancedStats(model),
             Padding(
               padding: const EdgeInsets.all(16),
               child: ElevatedButton(
-                onPressed: () => model.addTodo(context),
+                onPressed: model.addTodo,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.indigo,
                   foregroundColor: Colors.white,
@@ -38,15 +39,15 @@ class TodoView extends StatelessWidget {
                 child: const Text('Add New Todo'),
               ),
             ),
-            const Divider(),
-            Expanded(child: _buildTodoList(context, model)),
+            const Divider(height: 1),
+            Expanded(child: _buildEnhancedTodoList(model)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStats(TodoViewModel model) {
+  Widget _buildEnhancedStats(TodoViewModel model) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -62,45 +63,61 @@ class TodoView extends StatelessWidget {
     );
   }
 
-  Widget _statTile(String label, String value) => Column(
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 6),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-        ],
-      );
+  Widget _statTile(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 6),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
 
-  Widget _buildTodoList(BuildContext context, TodoViewModel model) {
-    if (model.todos.isEmpty) {
+  Widget _buildEnhancedTodoList(TodoViewModel model) {
+    final items = model.todos;
+    if (items.isEmpty) {
       return const Center(child: Text('No todos yet — add one!'));
     }
 
     return ListView.separated(
-      itemCount: model.todos.length,
-      separatorBuilder: (_, __) => const Divider(),
-      itemBuilder: (_, index) {
-        final todo = model.todos[index];
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final todo = items[index];
         return Dismissible(
           key: Key(todo.id),
-          background: _dismissBg(left: true),
-          secondaryBackground: _dismissBg(),
+          background: Container(color: Colors.redAccent, alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 16), child: const Icon(Icons.delete, color: Colors.white)),
+          secondaryBackground: Container(color: Colors.redAccent, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 16), child: const Icon(Icons.delete, color: Colors.white)),
           onDismissed: (_) => model.deleteTodo(todo.id),
           child: ListTile(
-            onTap: () => model.editTodo(context, todo),
+            onTap: () => model.editTodo(todo),
             leading: Checkbox(
               value: todo.isCompleted,
               onChanged: (_) => model.toggleComplete(todo.id),
             ),
-            title: Text(
-              todo.title,
-              style: TextStyle(
-                decoration: todo.isCompleted ? TextDecoration.lineThrough : null,
-              ),
+            title: Text(todo.title, style: TextStyle(decoration: todo.isCompleted ? TextDecoration.lineThrough : null)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (todo.notes.isNotEmpty) Text(todo.notes),
+                Row(
+                  children: [
+                    Text(todo.priority.label, style: TextStyle(color: todo.priority.color)),
+                    const SizedBox(width: 8),
+                    Text('· ${todo.category.label}'),
+                    if (todo.dueDate != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: Text('· Due ${todo.dueDate!.day}/${todo.dueDate!.month}/${todo.dueDate!.year}'),
+                      ),
+                  ],
+                ),
+              ],
             ),
-            subtitle: _buildSubtitle(todo),
             trailing: IconButton(
               icon: const Icon(Icons.more_vert),
-              onPressed: () => _showMenu(context, model, todo),
+              onPressed: () => _showTodoMenu(context, model, todo),
             ),
           ),
         );
@@ -108,45 +125,18 @@ class TodoView extends StatelessWidget {
     );
   }
 
-  Widget _dismissBg({bool left = false}) => Container(
-        color: Colors.redAccent,
-        alignment: left ? Alignment.centerLeft : Alignment.centerRight,
-        padding: EdgeInsets.only(left: left ? 16 : 0, right: left ? 0 : 16),
-        child: const Icon(Icons.delete, color: Colors.white),
-      );
-
-  Widget _buildSubtitle(Todo todo) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (todo.notes.isNotEmpty) Text(todo.notes),
-          Row(
-            children: [
-              Text(todo.priority.label, style: TextStyle(color: todo.priority.color)),
-              const SizedBox(width: 8),
-              Text('· ${todo.category.label}'),
-              if (todo.dueDate != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Text('· Due ${todo.dueDate!.day}/${todo.dueDate!.month}/${todo.dueDate!.year}'),
-                ),
-            ],
-          ),
-        ],
-      );
-
-  void _showMenu(BuildContext context, TodoViewModel model, Todo todo) {
+  void _showTodoMenu(BuildContext context, TodoViewModel model, Todo todo) {
     showModalBottomSheet(
       context: context,
       builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Wrap(
           children: [
             ListTile(
               leading: const Icon(Icons.edit),
               title: const Text('Edit'),
               onTap: () {
                 Navigator.pop(context);
-                model.editTodo(context, todo);
+                model.editTodo(todo);
               },
             ),
             ListTile(
